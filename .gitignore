@@ -1,0 +1,7 @@
+.workbuddy/
+.vercel/
+node_modules/
+test.mp4
+*.log
+.DS_Store
+Thumbs.db

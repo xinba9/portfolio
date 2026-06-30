@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贾维斯 - Jarvis AI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* ---- Sidebar ---- */
+        .sidebar {
+            width: 260px;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            color: #e0e0e0;
+            border-right: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-header .logo {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 16px; color: #fff;
+        }
+        .sidebar-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
+
+        .sidebar-actions { padding: 12px 10px; }
+        .btn-new-chat {
+            width: 100%; padding: 10px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; color: #e0e0e0;
+            cursor: pointer; font-size: 14px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .btn-new-chat:hover { background: rgba(255,255,255,0.15); }
+
+        .chat-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .chat-item {
+            padding: 10px 12px; border-radius: 8px;
+            cursor: pointer; font-size: 13px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            transition: background 0.2s; color: #ccc;
+        }
+        .chat-item:hover { background: rgba(255,255,255,0.08); }
+        .chat-item.active { background: rgba(255,255,255,0.12); color: #fff; }
+
+        .sidebar-footer { padding: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .memory-btn {
+            width: 100%; padding: 8px;
+            background: none; border: none; color: #aaa;
+            cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 8px;
+            border-radius: 6px; transition: all 0.2s;
+        }
+        .memory-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+        /* ---- Main Area ---- */
+        .main { flex: 1; display: flex; flex-direction: column; }
+
+        /* Top bar */
+        .topbar {
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .model-selector {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; padding: 6px 12px;
+            color: #fff; font-size: 13px;
+            cursor: pointer;
+        }
+        .token-display {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: #aaa;
+        }
+        .token-badge {
+            background: rgba(255,255,255,0.08);
+            padding: 4px 10px; border-radius: 12px;
+            display: flex; align-items: center; gap: 4px;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .token-badge:hover { background: rgba(255,255,255,0.15); }
+        .token-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .dot-green { background: #4ade80; }
+        .dot-blue { background: #60a5fa; }
+        .dot-purple { background: #c084fc; }
+        .dot-yellow { background: #fbbf24; }
+        .dot-red { background: #f87171; }
+
+        /* Quota bar */
+        .quota-bar-container {
+            max-width: 780px; margin: 0 auto;
+            padding: 0 24px 6px;
+        }
+        .quota-bar-wrapper {
+            background: rgba(255,255,255,0.06);
+            border-radius: 6px; height: 6px;
+            overflow: hidden; position: relative;
+        }
+        .quota-bar-fill {
+            height: 100%; border-radius: 6px;
+            transition: width 0.5s ease, background 0.5s ease;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+        }
+        .quota-bar-fill.warn { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .quota-bar-fill.danger { background: linear-gradient(90deg, #f87171, #ef4444); }
+        .quota-text {
+            font-size: 11px; color: #888;
+            margin-top: 4px; display: flex;
+            justify-content: space-between;
+        }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1; overflow-y: auto;
+            padding: 24px 0;
+            scroll-behavior: smooth;
+        }
+        .chat-container { max-width: 780px; margin: 0 auto; padding: 0 24px; }
+
+        .msg {
+            display: flex; gap: 14px;
+            margin-bottom: 24px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg-avatar {
+            width: 34px; height: 34px;
+            border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold;
+        }
+        .msg-user .msg-avatar {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+        }
+        .msg-ai .msg-avatar {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: #fff;
+        }
+        .msg-content { flex: 1; padding-top: 4px; line-height: 1.7; color: #e8e8e8; }
+        .msg-content p { margin-bottom: 10px; }
+        .msg-content pre {
+            background: rgba(0,0,0,0.4); border-radius: 8px;
+            padding: 14px; overflow-x: auto;
+            font-size: 13px; margin: 12px 0;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .msg-content code {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px; border-radius: 4px;
+            font-size: 13px;
+        }
+        .msg-meta {
+            font-size: 11px; color: #666;
+            margin-top: 6px; display: flex; gap: 10px;
+        }
+
+        /* Welcome screen */
+        .welcome {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100%; text-align: center;
+            padding: 40px;
+        }
+        .welcome.hidden { display: none; }
+        .welcome h1 {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(90deg, #00d2ff, #7b2ff7, #ff6fd8);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .welcome p { color: #999; font-size: 15px; margin-bottom: 32px; }
+        .quick-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        .quick-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px; padding: 14px 20px;
+            color: #ddd; cursor: pointer; font-size: 14px;
+            transition: all 0.2s; min-width: 160px;
+        }
+        .quick-btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-2px); }
+
+        /* Input area */
+        .input-area {
+            padding: 16px 24px 20px;
+            background: rgba(0,0,0,0.2);
+        }
+        .input-container {
+            max-width: 780px; margin: 0 auto;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px; padding: 12px 16px;
+            display: flex; align-items: flex-end; gap: 12px;
+            transition: border-color 0.2s;
+        }
+        .input-container:focus-within { border-color: rgba(0,210,255,0.4); }
+        .input-container textarea {
+            flex: 1; background: none; border: none; outline: none;
+            resize: none; color: #fff; font-size: 15px;
+            font-family: inherit; line-height: 1.5;
+            max-height: 120px; min-height: 24px;
+        }
+        .input-container textarea::placeholder { color: #666; }
+        .btn-send {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            border: none; color: #fff; cursor: pointer;
+            font-size: 16px; display: flex;
+            align-items: center; justify-content: center;
+            transition: transform 0.15s, opacity 0.15s;
+            flex-shrink: 0;
+        }
+        .btn-send:hover { transform: scale(1.08); }
+        .btn-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        .status-bar {
+            max-width: 780px; margin: 6px auto 0;
+            font-size: 11px; color: #666;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        /* Memory Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; opacity: 0; pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: all; }
+        .modal {
+            background: #1a1a2e; border-radius: 16px;
+            padding: 24px; width: 520px; max-height: 70vh;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow-y: auto;
+        }
+        .modal h3 { color: #fff; margin-bottom: 16px; font-size: 18px; }
+        .memory-entry {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px; padding: 12px;
+            margin-bottom: 10px; color: #ccc; font-size: 13px;
+            border-left: 3px solid #7b2ff7;
+        }
+        .modal-close {
+            background: rgba(255,255,255,0.1); border: none;
+            color: #ccc; padding: 8px 18px; border-radius: 8px;
+            cursor: pointer; float: right; font-size: 13px;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.2); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">J</div>
+            <h2>贾维斯</h2>
+        </div>
+    <div class="sidebar-actions">
+        <button class="btn-new-chat" onclick="newChat()">
+            ✨ 新建对话
+        </button>
+    </div>
+    <div class="chat-list" id="chatList"></div>
+    <div class="sidebar-footer">
+        <button class="memory-btn" onclick="showMemory()">
+            🧠 查看记忆
+        </button>
+    </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+    <div class="topbar">
+        <select class="model-selector" id="modelSelect" onchange="switchModel(this.value)">
+            <option value="z-ai/glm-5.1">🌟 GLM-5.1（默认）</option>
+            <option value="minimaxai/minimax-m3">🤖 MiniMax M3</option>
+            <option value="minimaxai/minimax-m2.7">💻 MiniMax M2.7</option>
+            <option value="deepseek-ai/deepseek-v4-flash">⚡ DeepSeek V4 Flash</option>
+            <option value="moonshotai/kimi-k2.6">📚 Kimi K2.6</option>
+        </select>
+        <div class="token-display">
+            <div class="token-badge" title="输入Tokens">
+                <span class="dot dot-blue"></span>
+                <span>输入: <strong id="tokensIn">0</strong></span>
+            </div>
+            <div class="token-badge" title="输出Tokens">
+                <span class="dot dot-green"></span>
+                <span>输出: <strong id="tokensOut">0</strong></span>
+            </div>
+            <div class="token-badge" title="总计Tokens">
+                <span class="dot dot-purple"></span>
+                <span>总计: <strong id="tokensTotal">0</strong></span>
+            </div>
+            <div class="token-badge" title="点击设置Token额度" onclick="openSettings()" style="cursor:pointer;">
+                <span class="dot dot-yellow"></span>
+                <span>余额</span>
+            </div>
+        </div>
+        <button class="memory-btn" onclick="openSettings()" title="设置" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;padding:4px 8px;">⚙️</button>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+        <div class="chat-container">
+            <!-- Welcome -->
+            <div class="welcome" id="welcome">
+                <h1>👋 你好，我是 贾维斯</h1>
+                <p>由英伟达 NVIDIA NIM 驱动的 AI 助手</p>
+                <div class="quick-actions">
+                    <div class="quick-btn" onclick="sendQuick('请用Python写一个快速排序算法')">💻 写代码</div>
+                    <div class="quick-btn" onclick="sendQuick('请解释什么是量子计算')">🔬 解释概念</div>
+                    <div class="quick-btn" onclick="sendQuick('请帮我写一篇关于AI的短文')">✍️ 创意写作</div>
+                    <div class="quick-btn" onclick="sendQuick('请分析这段文本的情感倾向')">📊 文本分析</div>
+                </div>
+            </div>
+            <!-- Messages injected here -->
+            <div id="messages"></div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-container">
+            <textarea id="userInput" placeholder="输入消息...（Shift+Enter 换行，Enter 发送）" rows="1"></textarea>
+            <button class="btn-send" id="btnSend" onclick="sendMessage()">➤</button>
+        </div>
+        <div class="status-bar">
+            <span id="statusText">✅ 就绪 · 记忆已启用</span>
+            <span id="sessionTokens">本次会话: 0 tokens</span>
+        </div>
+    </div>
+
+    <!-- Quota Bar -->
+    <div class="quota-bar-container" id="quotaBarContainer" style="display:none;">
+        <div class="quota-bar-wrapper">
+            <div class="quota-bar-fill" id="quotaBarFill" style="width:100%;"></div>
+        </div>
+        <div class="quota-text">
+            <span id="quotaUsed">已用: 0</span>
+            <span id="quotaRemaining">剩余: 未设置</span>
+            <span id="quotaPercent">--</span>
+        </div>
+    </div>
+</div>
+
+<!-- Memory Modal -->
+<div class="modal-overlay" id="memoryModal">
+    <div class="modal">
+        <button class="modal-close" onclick="closeMemory()">关闭</button>
+        <h3>🧠 对话记忆</h3>
+        <div id="memoryContent">
+            <p style="color:#888;font-size:13px;">记忆内容将在这里显示...</p>
+        </div>
+        <div style="margin-top:16px;text-align:right;">
+            <button class="modal-close" onclick="clearMemory()" style="background:rgba(239,68,68,0.2);color:#ef4444;">清除所有记忆</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+        <button class="modal-close" onclick="closeSettings()">关闭</button>
+        <h3>⚙️ 设置</h3>
+        <div style="color:#ccc;font-size:13px;line-height:2;">
+            <div style="margin-bottom:16px;">
+                <label style="display:block;margin-bottom:6px;color:#aaa;">Token 总额度（手动设置）</label>
+                <input type="number" id="quotaTotalInput" placeholder="例如：1000000"
+                       style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;">
+                <p style="color:#666;font-size:11px;margin-top:6px;">请在 <a href="https://build.nvidia.com/settings/api-keys" target="_blank" style="color:#7b2ff7;">英伟达控制台</a> 查看你的额度，然后填入此处。设置后本地自动追踪消耗。</p>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block;margin-bottom:6px;color:#aaa;">当前已用 Tokens</label>
+                <input type="number" id="quotaUsedInput" placeholder="自动计算"
+                       style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;">
+                <p style="color:#666;font-size:11px;margin-top:6px;">可手动调整，例如换设备后同步已用量。</p>
+            </div>
+            <button onclick="saveQuotaSettings()"
+                    style="width:100%;padding:10px;background:linear-gradient(135deg,#00d2ff,#7b2ff7);border:none;border-radius:8px;color:#fff;font-size:14px;cursor:pointer;font-weight:600;">
+                💾 保存设置
+            </button>
+            <div id="quotaStatus" style="margin-top:10px;font-size:12px;color:#4ade80;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =============================================
+//  STATE & CONFIG
+// =============================================
+const PROXY_URL = '/api/chat';
+
+let chats = [];         // All chat sessions
+let activeChatId = null; // Current chat
+let isGenerating = false;
+let sessionTokenCount = 0;
+
+// Memory: loaded from localStorage
+let memories = [];
+// Quota: track token balance locally
+let quotaTotal = 0;   // Total quota (set by user)
+let quotaUsed = 0;    // Tokens used so far
+
+// =============================================
+//  INIT
+// =============================================
+function init() {
+    loadFromStorage();
+    loadQuota();
+    if (chats.length === 0) {
+        createNewChat();
+    } else {
+        // Restore last active chat
+        const lastId = localStorage.getItem('hermes-last-chat');
+        const existing = chats.find(c => c.id === lastId);
+        switchChat(existing ? lastId : chats[0].id);
+    }
+    renderChatList();
+    loadMemories();
+}
+
+// =============================================
+//  CHAT MANAGEMENT
+// =============================================
+function createNewChat() {
+    const chat = {
+        id: 'chat-' + Date.now(),
+        title: '新对话',
+        messages: [],
+        model: document.getElementById('modelSelect').value,
+        createdAt: new Date().toISOString()
+    };
+    chats.unshift(chat);
+    activeChatId = chat.id;
+    saveToStorage();
+    renderChatList();
+    clearMessages();
+    showWelcome();
+    updateStatus('✅ 新对话已创建');
+}
+
+function newChat() {
+    createNewChat();
+}
+
+function switchChat(chatId) {
+    activeChatId = chatId;
+    localStorage.setItem('hermes-last-chat', chatId);
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+
+    // Restore model
+    document.getElementById('modelSelect').value = chat.model || 'z-ai/glm-5.1';
+
+    // Restore messages
+    clearMessages();
+    hideWelcome();
+    chat.messages.forEach(m => appendMessage(m.role, m.content, m.tokens, false));
+    renderChatList();
+    updateTokenDisplay(chat.messages);
+}
+
+function getActiveChat() {
+    return chats.find(c => c.id === activeChatId);
+}
+
+// =============================================
+//  SEND MESSAGE
+// =============================================
+async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text || isGenerating) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    hideWelcome();
+
+    // Add user message
+    appendMessage('user', text, null, true);
+    const chat = getActiveChat();
+    if (chat) {
+        chat.messages.push({ role: 'user', content: text });
+        // Update title from first message
+        if (chat.messages.length === 1) {
+            chat.title = text.length > 20 ? text.substring(0, 20) + '...' : text;
+            renderChatList();
+        }
+        saveToStorage();
+    }
+
+    // Build payload with memory context
+    const model = document.getElementById('modelSelect').value;
+    const messages = buildMessagesWithMemory(text);
+
+    // Show typing indicator
+    isGenerating = true;
+    updateSendButton();
+    const typingId = appendTypingIndicator();
+
+    try {
+        const response = await fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                max_tokens: 4096,
+                temperature: 0.7,
+                stream: false  // Use non-stream for token info
+            })
+        });
+
+        removeTypingIndicator(typingId);
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const aiContent = data.choices?.[0]?.message?.content || '（无回复）';
+        const usage = data.usage || {};
+
+        // Display AI reply
+        appendMessage('assistant', aiContent, usage, true);
+
+        // Save to chat
+        if (chat) {
+            chat.messages.push({
+                role: 'assistant',
+                content: aiContent,
+                tokens: usage
+            });
+            saveToStorage();
+        }
+
+        // Update token display
+        updateTokenDisplayForUsage(usage);
+        addQuotaUsage(usage);
+        sessionTokenCount += (usage.total_tokens || 0);
+        document.getElementById('sessionTokens').textContent =
+            `本次会话: ${sessionTokenCount.toLocaleString()} tokens`;
+
+        // Extract memory from conversation (simple heuristic)
+        extractMemory(text, aiContent);
+
+    } catch (e) {
+        removeTypingIndicator(typingId);
+        appendMessage('assistant', `⚠️ 请求失败: ${e.message}`, null, true);
+        updateStatus(`❌ 错误: ${e.message}`);
+    } finally {
+        isGenerating = false;
+        updateSendButton();
+    }
+}
+
+function buildMessagesWithMemory(userText) {
+    const chat = getActiveChat();
+    if (!chat) return [{ role: 'user', content: userText }];
+
+    // Build system message with memories
+    let systemContent = '你是贾维斯（Jarvis），一个由英伟达 NVIDIA NIM 驱动的 AI 助手。';
+    if (memories.length > 0) {
+        systemContent += '\n\n以下是你之前了解到的关于用户的信息（记忆）：\n';
+        memories.forEach(m => {
+            systemContent += `- ${m}\n`;
+        });
+    }
+
+    const messages = [{ role: 'system', content: systemContent }];
+
+    // Add recent chat history (last 20 messages to stay within context)
+    const recent = chat.messages.slice(-20);
+    recent.forEach(m => messages.push({ role: m.role, content: m.content }));
+
+    // Add current user message if not already included
+    if (recent[recent.length - 1]?.content !== userText) {
+        messages.push({ role: 'user', content: userText });
+    }
+
+    return messages;
+}
+
+// =============================================
+//  MEMORY
+// =============================================
+function extractMemory(userText, aiText) {
+    // Simple heuristic: save facts about the user
+    const memoryKeywords = ['我叫', '我是', '我的', '我喜欢', '我需要', '请记住', '记住'];
+    let found = false;
+    memoryKeywords.forEach(kw => {
+        if (userText.includes(kw)) {
+            const fact = userText.length > 100 ? userText.substring(0, 100) + '...' : userText;
+            if (!memories.includes(fact)) {
+                memories.push(fact);
+                found = true;
+            }
+        }
+    });
+
+    if (found) {
+        saveMemories();
+        updateStatus('🧠 已更新记忆');
+    }
+}
+
+function loadMemories() {
+    try {
+        const stored = localStorage.getItem('hermes-memories');
+        if (stored) memories = JSON.parse(stored);
+    } catch (e) {}
+}
+
+function saveMemories() {
+    localStorage.setItem('hermes-memories', JSON.stringify(memories));
+}
+
+function showMemory() {
+    const content = document.getElementById('memoryContent');
+    if (memories.length === 0) {
+        content.innerHTML = '<p style="color:#888;font-size:13px;">暂无记忆内容。在对话中提到关于自己的信息，我会自动记住。</p>';
+    } else {
+        content.innerHTML = memories.map(m =>
+            `<div class="memory-entry">${escapeHtml(m)}</div>`
+        ).join('');
+    }
+    document.getElementById('memoryModal').classList.add('show');
+}
+
+function closeMemory() {
+    document.getElementById('memoryModal').classList.remove('show');
+}
+
+// =============================================
+//  QUOTA & SETTINGS
+// =============================================
+function loadQuota() {
+    try {
+        quotaTotal = parseInt(localStorage.getItem('hermes-quota-total')) || 0;
+        quotaUsed  = parseInt(localStorage.getItem('hermes-quota-used'))  || 0;
+    } catch (e) {}
+    updateQuotaDisplay();
+}
+
+function saveQuota() {
+    localStorage.setItem('hermes-quota-total', quotaTotal.toString());
+    localStorage.setItem('hermes-quota-used',  quotaUsed.toString());
+}
+
+function openSettings() {
+    document.getElementById('quotaTotalInput').value = quotaTotal || '';
+    document.getElementById('quotaUsedInput').value  = quotaUsed  || '';
+    document.getElementById('quotaStatus').textContent = '';
+    document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeSettings() {
+    document.getElementById('settingsModal').classList.remove('show');
+}
+
+function saveQuotaSettings() {
+    const newTotal = parseInt(document.getElementById('quotaTotalInput').value) || 0;
+    const newUsed  = parseInt(document.getElementById('quotaUsedInput').value)  || 0;
+
+    if (newTotal <= 0) {
+        document.getElementById('quotaStatus').style.color = '#ef4444';
+        document.getElementById('quotaStatus').textContent = '❌ 请输入有效的额度数值';
+        return;
+    }
+
+    quotaTotal = newTotal;
+    quotaUsed  = newUsed;
+    saveQuota();
+    updateQuotaDisplay();
+
+    document.getElementById('quotaStatus').style.color = '#4ade80';
+    document.getElementById('quotaStatus').textContent = '✅ 设置已保存！';
+    setTimeout(closeSettings, 800);
+}
+
+function updateQuotaDisplay() {
+    const container = document.getElementById('quotaBarContainer');
+    const fill      = document.getElementById('quotaBarFill');
+    const txtUsed   = document.getElementById('quotaUsed');
+    const txtRem    = document.getElementById('quotaRemaining');
+    const txtPct    = document.getElementById('quotaPercent');
+
+    if (quotaTotal <= 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    const remaining = Math.max(0, quotaTotal - quotaUsed);
+    const pct = quotaTotal > 0 ? (remaining / quotaTotal * 100) : 0;
+
+    fill.style.width = pct + '%';
+    fill.className = 'quota-bar-fill' + (pct <= 10 ? ' danger' : pct <= 25 ? ' warn' : '');
+
+    txtUsed.textContent  = '已用: ' + quotaUsed.toLocaleString();
+    txtRem.textContent   = '剩余: ' + remaining.toLocaleString() + ' / ' + quotaTotal.toLocaleString();
+    txtPct.textContent   = '(' + pct.toFixed(1) + '%)';
+
+    // Update the balance badge in topbar
+    const badge = document.querySelector('.token-badge[title*="余额"] strong');
+    if (badge) {
+        badge.textContent = remaining >= 10000
+            ? (remaining / 10000).toFixed(1) + '万'
+            : remaining.toLocaleString();
+        // Color the dot by remaining %
+        const dot = document.querySelector('.token-badge[title*="余额"] .dot');
+        if (dot) dot.className = 'dot ' + (pct <= 10 ? 'dot-red' : pct <= 25 ? 'dot-yellow' : 'dot-green');
+    }
+}
+
+function addQuotaUsage(usage) {
+    if (!usage || quotaTotal <= 0) return;
+    quotaUsed += (usage.total_tokens || 0);
+    // Cap at total
+    if (quotaUsed > quotaTotal) quotaUsed = quotaTotal;
+    saveQuota();
+    updateQuotaDisplay();
+}
+
+function clearMemory() {
+    if (confirm('确定要清除所有记忆吗？')) {
+        memories = [];
+        saveMemories();
+        showMemory();
+    }
+}
+
+// =============================================
+//  UI HELPERS
+// =============================================
+function appendMessage(role, content, tokens, animate) {
+    const container = document.getElementById('messages');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `msg msg-${role}`;
+
+    const avatarLabel = role === 'user' ? '我' : 'H';
+    const tokensHtml = tokens
+        ? `<div class="msg-meta"><span>🔢 ${tokens.prompt_tokens || 0}↑ ${tokens.completion_tokens || 0}↓ ${tokens.total_tokens || 0}Σ</span></div>`
+        : '';
+
+    // Simple markdown-like rendering
+    const rendered = renderContent(content);
+
+    msgDiv.innerHTML = `
+        <div class="msg-avatar">${avatarLabel}</div>
+        <div class="msg-content">
+            ${rendered}
+            ${tokensHtml}
+        </div>
+    `;
+
+    if (!animate) msgDiv.style.animation = 'none';
+    container.appendChild(msgDiv);
+    scrollToBottom();
+    return msgDiv.id;
+}
+
+function renderContent(text) {
+    // Escape HTML first
+    let html = escapeHtml(text);
+    // Code blocks
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        return `<pre><code class="lang-${lang}">${code.trim()}</code></pre>`;
+    });
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Paragraphs
+    html = html.split('\n').map(p => p.trim() ? `<p>${p}</p>` : '').join('');
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function appendTypingIndicator() {
+    const container = document.getElementById('messages');
+    const el = document.createElement('div');
+    el.id = 'typing-' + Date.now();
+    el.className = 'msg msg-ai';
+    el.innerHTML = `
+        <div class="msg-avatar">H</div>
+        <div class="msg-content">
+            <p><span class="dots">● ● ●</span></p>
+        </div>
+    `;
+    container.appendChild(el);
+    scrollToBottom();
+    return el.id;
+}
+
+function removeTypingIndicator(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+function clearMessages() {
+    document.getElementById('messages').innerHTML = '';
+}
+
+function showWelcome() {
+    document.getElementById('welcome').classList.remove('hidden');
+}
+
+function hideWelcome() {
+    document.getElementById('welcome').classList.add('hidden');
+}
+
+function scrollToBottom() {
+    const area = document.getElementById('chatArea');
+    setTimeout(() => area.scrollTop = area.scrollHeight, 50);
+}
+
+function updateSendButton() {
+    const btn = document.getElementById('btnSend');
+    btn.disabled = isGenerating;
+    btn.textContent = isGenerating ? '⏳' : '➤';
+}
+
+function updateStatus(text) {
+    document.getElementById('statusText').textContent = text;
+}
+
+function updateTokenDisplay(messages) {
+    let inT = 0, outT = 0;
+    messages.forEach(m => {
+        if (m.tokens) {
+            inT += m.tokens.prompt_tokens || 0;
+            outT += m.tokens.completion_tokens || 0;
+        }
+    });
+    document.getElementById('tokensIn').textContent = inT.toLocaleString();
+    document.getElementById('tokensOut').textContent = outT.toLocaleString();
+    document.getElementById('tokensTotal').textContent = (inT + outT).toLocaleString();
+}
+
+function updateTokenDisplayForUsage(usage) {
+    const prevIn = parseInt(document.getElementById('tokensIn').textContent.replace(/,/g, '')) || 0;
+    const prevOut = parseInt(document.getElementById('tokensOut').textContent.replace(/,/g, '')) || 0;
+
+    document.getElementById('tokensIn').textContent = (prevIn + (usage.prompt_tokens || 0)).toLocaleString();
+    document.getElementById('tokensOut').textContent = (prevOut + (usage.completion_tokens || 0)).toLocaleString();
+    document.getElementById('tokensTotal').textContent =
+        (prevIn + prevOut + (usage.total_tokens || 0)).toLocaleString();
+}
+
+function switchModel(model) {
+    const chat = getActiveChat();
+    if (chat) {
+        chat.model = model;
+        saveToStorage();
+    }
+    updateStatus(`✅ 已切换模型: ${model}`);
+}
+
+function sendQuick(text) {
+    document.getElementById('userInput').value = text;
+    sendMessage();
+}
+
+// =============================================
+//  STORAGE (localStorage)
+// =============================================
+function saveToStorage() {
+    try {
+        const data = chats.map(c => ({
+            id: c.id,
+            title: c.title,
+            messages: c.messages,
+            model: c.model,
+            createdAt: c.createdAt
+        }));
+        localStorage.setItem('hermes-chats', JSON.stringify(data));
+    } catch (e) {
+        console.error('Save failed:', e);
+    }
+}
+
+function loadFromStorage() {
+    try {
+        const data = localStorage.getItem('hermes-chats');
+        if (data) chats = JSON.parse(data);
+    } catch (e) {
+        chats = [];
+    }
+}
+
+// =============================================
+//  RENDER CHAT LIST
+// =============================================
+function renderChatList() {
+    const container = document.getElementById('chatList');
+    container.innerHTML = chats.map(c => `
+        <div class="chat-item ${c.id === activeChatId ? 'active' : ''}"
+             onclick="switchChat('${c.id}')"
+             title="${escapeHtml(c.title)}">
+            💬 ${escapeHtml(c.title)}
+        </div>
+    `).join('');
+}
+
+// =============================================
+//  EVENT LISTENERS
+// =============================================
+document.getElementById('userInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// Auto-resize textarea
+document.getElementById('userInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// Close modal on overlay click
+document.getElementById('memoryModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeMemory();
+});
+document.getElementById('settingsModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeSettings();
+});
+
+// Init on load
+init();
+</script>
+</body>
+</html>
